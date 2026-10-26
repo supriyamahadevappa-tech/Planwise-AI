@@ -19,7 +19,7 @@ Build mode: learn.
   Learner check: Open the Preview, add and edit a task, close/reload it, and tell me whether the dashboard and saved task details match what you expect.
   Commit: `Add dashboard tasks and local saving`
 
-- [ ] **2. Students can get a Basic Plan that obeys the scheduling rules**
+- [x] **2. Students can get a Basic Plan that obeys the scheduling rules**
   Becomes usable: A student can generate a clearly labeled local Basic Plan with breaks, whole-task fit, and a clear list of unscheduled tasks, even without AI.
   Why now: The fallback is usable without the external service and proves the central schedule kernel before adding AI integration. It also establishes the deterministic rules the AI proposal must pass.
   PRD ref: `prd.md > AI Daily Plan`, `prd.md > AI Failure and Basic Plan`, `prd.md > States and Boundaries`, `prd.md > Acceptance Criteria`
@@ -72,4 +72,5 @@ Activity mode: pending build mode choice.
 
 ## Revisions
 
-- Scheduling regression repair verified: study sessions are preserved through plan save/restore, completed-session state resets when a task is reopened, and leftover Free time is capped at 15 minutes. The learner confirmed study sessions appear in the generated plan. `npm test` passed 6/6 cases; `npm run build` passed TypeScript and production build. Slice 1 remains unchecked pending its task edit/reload/delete learner check. Slice 2 remains unchecked pending its complete ordering, unscheduled-task, and 10-minute-break verification.
+- Scheduling regression repair verified: study sessions are preserved through plan save/restore, completed-session state resets when a task is reopened, and leftover Free time is capped at 15 minutes. The learner confirmed study sessions appear in the generated plan. `npm test` passed 6/6 cases; `npm run build` passed TypeScript and production build.
+- Slice 2 correction: the earlier Basic Plan could schedule partial task work and used a 15-minute break, contrary to the approved whole-task and 10-minute-break rules. It now skips a task unless its remaining estimate and required breaks fit, continues to later tasks, and lists unscheduled tasks with recovery choices. Automated verification passed (`npm test`, 7/7; `npm run build`), and the learner confirmed the website works as described in Preview.

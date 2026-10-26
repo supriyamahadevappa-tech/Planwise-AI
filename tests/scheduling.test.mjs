@@ -55,13 +55,28 @@ test('45-minute task gets 45 minutes of study and 15 minutes of free time in 60 
   assert.equal(freeMinutes(plan), 15)
 })
 
-test('90-minute task keeps both study sessions and counts the break in 120 minutes', () => {
+test('tasks sort by deadline, then priority, then shorter estimate', () => {
+  const tasks = [
+    task(30, { id: 'high-long', deadline: '2026-10-27', priority: 'High' }),
+    task(15, { id: 'high-short', deadline: '2026-10-27', priority: 'High' }),
+    task(20, { id: 'medium', deadline: '2026-10-27', priority: 'Medium' }),
+    task(5, { id: 'earlier-deadline', deadline: '2026-10-26', priority: 'Low' }),
+    task(10, { id: 'low', deadline: '2026-10-27', priority: 'Low' }),
+  ]
+  assert.deepEqual(scheduler.sortTasks(tasks).map(item => item.id), [
+    'earlier-deadline', 'high-short', 'high-long', 'medium', 'low',
+  ])
+})
+
+test('90-minute task keeps both study sessions and counts the 10-minute break', () => {
   const plan = readyPlan(90, 120)
   assert.deepEqual(plan.blocks.filter(block => block.type === 'study').map(block => block.durationMinutes), [45, 45])
   assert.equal(plan.blocks.filter(block => block.type === 'break').reduce((sum, block) => sum + block.durationMinutes, 0), scheduler.BREAK_MINUTES)
+  assert.equal(scheduler.BREAK_MINUTES, 10)
   assert.equal(studyMinutes(plan), 90)
   assert.equal(freeMinutes(plan), 15)
-  assert.equal(plan.blocks.reduce((sum, block) => sum + block.durationMinutes, 0), 120)
+  assert.equal(plan.blocks.reduce((sum, block) => sum + block.durationMinutes, 0), 115)
+  assert.ok(plan.blocks.reduce((sum, block) => sum + block.durationMinutes, 0) <= 120)
 })
 
 test('saved and restored plans preserve study sessions and cap only unused time', () => {
@@ -81,13 +96,20 @@ test('saved and restored plans preserve study sessions and cap only unused time'
   assert.equal(restored.notice, null)
 })
 
-test('a partially schedulable task keeps its scheduled work and reports the remainder', () => {
-  const plan = readyPlan(90, 60)
+test('a task that does not fully fit stays whole while later tasks are checked', () => {
+  const largeTask = task(90, { id: 'large', deadline: '2026-10-27' })
+  const laterTask = task(45, { id: 'later-short', deadline: '2026-10-28' })
+  const result = scheduler.buildBasicPlan([largeTask, laterTask], 60, null, new Date('2026-10-26T12:00:00Z'))
+  assert.equal(result.kind, 'ready')
+  const plan = result.plan
+  assert.deepEqual(plan.blocks.filter(block => block.type === 'study').map(block => block.taskId), ['later-short'])
   assert.equal(studyMinutes(plan), 45)
   assert.equal(plan.unscheduled.length, 1)
-  assert.equal(plan.unscheduled[0].plannedMinutesToday, 45)
-  assert.equal(plan.unscheduled[0].remainingMinutesAfterToday, 45)
+  assert.equal(plan.unscheduled[0].task.id, 'large')
+  assert.equal(plan.unscheduled[0].plannedMinutesToday, 0)
+  assert.equal(plan.unscheduled[0].remainingMinutesAfterToday, 90)
   assert.equal(plan.unscheduled[0].task.estimatedMinutes, 90)
+  assert.match(plan.unscheduled[0].reason, /increase your study time, remove a task, or plan it for another day/i)
   assert.equal(freeMinutes(plan), 15)
 })
 

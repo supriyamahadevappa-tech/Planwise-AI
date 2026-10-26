@@ -93,12 +93,12 @@ export default function App() {
     const hasStudyTime = result.plan.blocks.some(block => block.type === 'study')
     setPlanMessage(hasStudyTime
       ? result.plan.unscheduled.length > 0
-        ? 'Your plan for today is ready. Partial work and remaining minutes are listed below.'
+        ? 'Your Basic Plan is ready. Unscheduled tasks and next steps are listed below.'
         : result.plan.comingUp.length > 0
           ? 'Your plan for today is ready. Later-deadline tasks are saved for another day.'
           : 'Your Basic Plan is ready for today.'
       : result.plan.unscheduled.length > 0
-        ? 'A full focus session does not fit today. See Work remaining for urgent task details.'
+        ? 'No complete task fits in today’s available time. See the unscheduled tasks below.'
         : result.plan.comingUp.length > 0
           ? 'No tasks are due soon. Your later tasks are saved below for another day.'
           : 'There is no unfinished study work to schedule today.')
@@ -115,7 +115,7 @@ export default function App() {
   const totals = plan ? planTotals(plan) : { studyMinutes: 0, breakMinutes: 0, freeMinutes: 0 }
   const canGenerate = appState.tasks.some(task => !task.completed) && appState.availableMinutes !== null
   const invalidHours = hoursInput.trim() !== '' && (!Number.isFinite(Number(hoursInput)) || Number(hoursInput) < 0)
-  const topButtonLabel = plan ? 'Regenerate My Study Plan' : 'Generate My Study Plan'
+  const topButtonLabel = plan ? 'Regenerate Basic Plan' : 'Use Basic Plan'
 
   return (
     <div className="app-shell" id="home">
@@ -240,8 +240,7 @@ function PlanView({
   const completedTasks = tasks.filter(task => task.completed).length
   const workRemaining = plan.unscheduled.map(item => {
     const completedInPlan = studyBlocks.filter(block => block.taskId === item.task.id && block.completed).reduce((sum, block) => sum + block.durationMinutes, 0)
-    const plannedStillToday = studyBlocks.filter(block => block.taskId === item.task.id && !block.completed).reduce((sum, block) => sum + block.durationMinutes, 0)
-    return { ...item, remainingNow: Math.max(0, item.task.estimatedMinutes - item.completedWorkMinutesBefore - completedInPlan), plannedStillToday }
+    return { ...item, remainingNow: Math.max(0, item.task.estimatedMinutes - item.completedWorkMinutesBefore - completedInPlan) }
   })
 
   return (
@@ -269,8 +268,8 @@ function PlanView({
             <label className="complete-control"><input type="checkbox" aria-label={`Mark focus session ${block.sessionNumber} for ${block.task.title} ${block.completed ? 'not complete' : 'complete'}`} checked={block.completed} onChange={event => onToggleSession(block.id, event.target.checked)}/><span>{block.completed ? 'Done' : 'Complete session'}</span></label>
           </article>
         })}
-      </div> : <div className="plan-empty plan-empty--ready"><div className="plan-empty__icon"><Check size={18}/></div><div><strong>{plan.unscheduled.length ? 'No full focus session fits today' : plan.comingUp.length ? 'Your later work is saved' : 'Your list is clear'}</strong><p>{plan.unscheduled.length ? 'A full 45-minute focus session is needed for partial work; no short session was created.' : plan.comingUp.length ? 'Tasks with more time before their deadlines are saved for another day.' : 'There is no unfinished study work to schedule today.'}</p></div></div>}
-      {workRemaining.length > 0 && <section className="unscheduled-section" aria-labelledby="remaining-title"><div className="unscheduled-section__heading"><div><p className="eyebrow">Keep your next steps in view</p><h3 id="remaining-title">Work remaining <span className="count-badge">{workRemaining.length}</span></h3></div><span className="section-doodle" aria-hidden="true">✳</span></div><div className="unscheduled-list">{workRemaining.map(({ task, reason, remainingNow, remainingMinutesAfterToday, plannedStillToday }) => <article className="unscheduled-card" key={task.id}><div className="unscheduled-card__title"><strong>{task.title}</strong><span>{formatDeadline(task.deadline)}</span></div><p className="work-remaining__numbers">{formatMinutes(remainingNow)} of estimated work remains <span>·</span> {formatMinutes(plannedStillToday)} still planned today <span>·</span> {formatMinutes(remainingMinutesAfterToday)} to carry past today's plan</p><p>{reason}</p></article>)}</div><p className="unscheduled-help">Your task estimate stays unchanged. Study-session checkmarks track progress without checking off the task itself.</p></section>}
+      </div> : <div className="plan-empty plan-empty--ready"><div className="plan-empty__icon"><Check size={18}/></div><div><strong>{plan.unscheduled.length ? 'No complete task fits today' : plan.comingUp.length ? 'Your later work is saved' : 'Your list is clear'}</strong><p>{plan.unscheduled.length ? 'Tasks stay whole: nothing was shortened or partly scheduled.' : plan.comingUp.length ? 'Tasks with more time before their deadlines are saved for another day.' : 'There is no unfinished study work to schedule today.'}</p></div></div>}
+      {workRemaining.length > 0 && <section className="unscheduled-section" aria-labelledby="remaining-title"><div className="unscheduled-section__heading"><div><p className="eyebrow">Keep your next steps in view</p><h3 id="remaining-title">Unscheduled tasks <span className="count-badge">{workRemaining.length}</span></h3></div><span className="section-doodle" aria-hidden="true">✳</span></div><div className="unscheduled-list">{workRemaining.map(({ task, reason, remainingNow }) => <article className="unscheduled-card" key={task.id}><div className="unscheduled-card__title"><strong>{task.title}</strong><span>{formatDeadline(task.deadline)}</span></div><p className="work-remaining__numbers">Estimated work remaining: {formatMinutes(remainingNow)}</p><p>{reason}</p></article>)}</div><p className="unscheduled-help">You can increase your available study hours, remove a task, or plan it for another day. Each task keeps its original estimate.</p></section>}
       {plan.comingUp.length > 0 && <section className="coming-up-section" aria-labelledby="coming-up-title"><div className="coming-up-section__heading"><div><p className="eyebrow">There is time before these</p><h3 id="coming-up-title">Save for another day <span className="count-badge">{plan.comingUp.length}</span></h3></div><div className="coming-up-art" aria-hidden="true"><span>✦</span><i>little by little</i></div></div><div className="coming-up-list">{plan.comingUp.map(({ task, remainingMinutes }) => <article className="coming-up-card" key={task.id}><div className="coming-up-card__title"><span className="coming-up-card__icon" aria-hidden="true">✎</span><strong>{task.title}</strong><span className={`priority-pill priority-pill--${task.priority.toLowerCase()}`}>{task.priority}</span></div><p>{formatMinutes(remainingMinutes)} remaining <span>·</span> {formatDeadline(task.deadline)}</p></article>)}</div></section>}
     </div>
   )

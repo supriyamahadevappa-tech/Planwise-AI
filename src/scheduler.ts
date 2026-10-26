@@ -1,7 +1,7 @@
 import { MAX_FREE_MINUTES, type BreakBlock, type PlanBlock, type StudyPlan, type Task, type UnscheduledTask, type ComingUpTask } from './types'
 
 export const FOCUS_MINUTES = 45
-export const BREAK_MINUTES = 15
+export const BREAK_MINUTES = 10
 export const URGENT_WINDOW_DAYS = 7
 
 const priorityRank: Record<Task['priority'], number> = { High: 0, Medium: 1, Low: 2 }
@@ -76,43 +76,34 @@ export function buildBasicPlan(
   for (const task of orderedTasks) {
     const completedBefore = Math.min(task.estimatedMinutes, completedWorkMinutesBefore[task.id] ?? 0)
     completedWorkMinutesBefore[task.id] = completedBefore
-    let remaining = task.estimatedMinutes - completedBefore
-    const workBeforeToday = remaining
+    const remaining = task.estimatedMinutes - completedBefore
+    const breaksNeeded = Math.floor((focusMinutes + remaining - 1) / FOCUS_MINUTES)
+    const requiredMinutes = remaining + breaksNeeded * BREAK_MINUTES
 
-    while (remaining > 0) {
-      const availableLeft = availableMinutes - usedMinutes
-      if (focusMinutes >= FOCUS_MINUTES) {
-        const nextWork = Math.min(remaining, FOCUS_MINUTES)
-        if (availableLeft < BREAK_MINUTES + nextWork) break
-        blocks.push({ id: crypto.randomUUID(), type: 'break', kind: breakKinds[breakNumber++ % breakKinds.length], durationMinutes: BREAK_MINUTES })
-        usedMinutes += BREAK_MINUTES
-        focusMinutes = 0
+    if (requiredMinutes <= availableMinutes - usedMinutes) {
+      let workLeft = remaining
+      while (workLeft > 0) {
+        if (focusMinutes === FOCUS_MINUTES) {
+          blocks.push({ id: crypto.randomUUID(), type: 'break', kind: breakKinds[breakNumber++ % breakKinds.length], durationMinutes: BREAK_MINUTES })
+          usedMinutes += BREAK_MINUTES
+          focusMinutes = 0
+        }
+
+        const sessionMinutes = Math.min(workLeft, FOCUS_MINUTES - focusMinutes)
+        const sessionNumber = (sessionCounts.get(task.id) ?? 0) + 1
+        sessionCounts.set(task.id, sessionNumber)
+        blocks.push({
+          id: crypto.randomUUID(), type: 'study', taskId: task.id, task,
+          durationMinutes: sessionMinutes, sessionNumber, totalSessions: 0, completed: false,
+        })
+        usedMinutes += sessionMinutes
+        focusMinutes += sessionMinutes
+        workLeft -= sessionMinutes
       }
-
-      const sessionCapacity = FOCUS_MINUTES - focusMinutes
-      if (remaining > sessionCapacity && sessionCapacity < FOCUS_MINUTES) break
-      const sessionMinutes = Math.min(remaining, sessionCapacity)
-      if (availableMinutes - usedMinutes < sessionMinutes) break
-
-      const sessionNumber = (sessionCounts.get(task.id) ?? 0) + 1
-      sessionCounts.set(task.id, sessionNumber)
-      blocks.push({
-        id: crypto.randomUUID(), type: 'study', taskId: task.id, task,
-        durationMinutes: sessionMinutes, sessionNumber, totalSessions: 0, completed: false,
-      })
-      usedMinutes += sessionMinutes
-      focusMinutes += sessionMinutes
-      remaining -= sessionMinutes
-    }
-
-    const plannedMinutesToday = workBeforeToday - remaining
-    if (remaining > 0 && !(plannedMinutesToday === 0 && daysUntilDeadline(task.deadline, now) > URGENT_WINDOW_DAYS)) {
-      const reason = plannedMinutesToday > 0
-        ? `${plannedMinutesToday} min is in today's plan; ${remaining} min of this task remains for another day.`
-        : availableMinutes - usedMinutes < FOCUS_MINUTES && remaining > FOCUS_MINUTES
-          ? `Only ${Math.max(0, availableMinutes - usedMinutes)} min remains today. A full 45-minute focus session does not fit, so no shorter partial session was added.`
-          : `All ${remaining} min of remaining work must be planned for another day.`
-      unscheduled.push({ task, reason, completedWorkMinutesBefore: completedBefore, plannedMinutesToday, remainingMinutesAfterToday: remaining })
+    } else {
+      const availableLeft = Math.max(0, availableMinutes - usedMinutes)
+      const reason = `The full ${remaining}-minute task and its required breaks do not fit in today's remaining ${availableLeft} minutes. Increase your study time, remove a task, or plan it for another day.`
+      unscheduled.push({ task, reason, completedWorkMinutesBefore: completedBefore, plannedMinutesToday: 0, remainingMinutesAfterToday: remaining })
     }
   }
 
@@ -124,8 +115,9 @@ export function buildBasicPlan(
   const freeMinutes = Math.min(MAX_FREE_MINUTES, availableMinutes - usedMinutes)
   if (freeMinutes > 0) blocks.push({ id: crypto.randomUUID(), type: 'free', durationMinutes: freeMinutes })
 
+  const unscheduledIds = new Set(unscheduled.map(item => item.task.id))
   const comingUp: ComingUpTask[] = orderedTasks
-    .filter(task => daysUntilDeadline(task.deadline, now) > URGENT_WINDOW_DAYS && !sessionCounts.has(task.id))
+    .filter(task => daysUntilDeadline(task.deadline, now) > URGENT_WINDOW_DAYS && !sessionCounts.has(task.id) && !unscheduledIds.has(task.id))
     .map(task => {
     const completedWorkMinutes = Math.min(task.estimatedMinutes, completedWorkMinutesBefore[task.id] ?? 0)
     completedWorkMinutesBefore[task.id] = completedWorkMinutes
